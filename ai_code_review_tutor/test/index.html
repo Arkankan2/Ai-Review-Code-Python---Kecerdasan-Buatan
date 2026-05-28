@@ -1,0 +1,2051 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Code Review Tutor — Rule-Based AST Analyzer</title>
+  <meta name="description" content="Sistem AI Code Review Tutor berbasis Rule-Based Reasoning dan Forward Chaining untuk meningkatkan kualitas kode mahasiswa pemrograman dasar Python." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg-950: #060812;
+      --bg-900: #0d1117;
+      --bg-800: #161b26;
+      --bg-700: #1e2535;
+      --border: #1e293b;
+      --border-light: #2d3748;
+      --text-primary: #f0f4ff;
+      --text-secondary: #8892a4;
+      --text-muted: #4a5568;
+      --blue: #3b82f6;
+      --blue-light: #60a5fa;
+      --blue-dark: #1d4ed8;
+      --purple: #8b5cf6;
+      --purple-light: #a78bfa;
+      --cyan: #06b6d4;
+      --green: #10b981;
+      --yellow: #f59e0b;
+      --orange: #f97316;
+      --red: #ef4444;
+      --pink: #ec4899;
+      --critical: #ef4444;
+      --high: #f97316;
+      --medium: #f59e0b;
+      --low: #3b82f6;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-950);
+      color: var(--text-primary);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ============ SCROLLBAR ============ */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 99px; }
+
+    /* ============ TOP BAR ============ */
+    .topbar {
+      height: 56px;
+      background: rgba(13,17,23,0.95);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 20px;
+      flex-shrink: 0;
+      z-index: 100;
+    }
+
+    .topbar-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-icon {
+      width: 34px;
+      height: 34px;
+      background: linear-gradient(135deg, var(--blue), var(--purple));
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 900;
+      font-family: 'JetBrains Mono', monospace;
+      color: white;
+      flex-shrink: 0;
+    }
+
+    .topbar-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+      white-space: nowrap;
+    }
+
+    .topbar-subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .topbar-tabs {
+      display: flex;
+      gap: 2px;
+      margin-left: 16px;
+    }
+
+    .tab-btn {
+      padding: 6px 14px;
+      border-radius: 7px;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.2s;
+      background: transparent;
+      color: var(--text-secondary);
+    }
+
+    .tab-btn:hover { background: var(--bg-800); color: var(--text-primary); }
+    .tab-btn.active {
+      background: linear-gradient(135deg, rgba(59,130,246,0.2), rgba(139,92,246,0.2));
+      color: var(--blue-light);
+      border: 1px solid rgba(59,130,246,0.3);
+    }
+
+    .topbar-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .status-label { font-size: 12px; color: var(--green); font-weight: 500; }
+
+    /* ============ MAIN LAYOUT ============ */
+    .app-body {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* ============ SIDEBAR ============ */
+    .sidebar {
+      width: 220px;
+      background: var(--bg-900);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      overflow-y: auto;
+    }
+
+    .sidebar-section { padding: 14px 12px 8px; }
+    .sidebar-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      padding-left: 4px;
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text-secondary);
+      transition: all 0.18s;
+      border: 1px solid transparent;
+      margin-bottom: 2px;
+    }
+
+    .sidebar-item:hover { background: var(--bg-800); color: var(--text-primary); }
+    .sidebar-item.active {
+      background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(139,92,246,0.12));
+      color: var(--blue-light);
+      border-color: rgba(59,130,246,0.2);
+    }
+
+    .sidebar-item .icon { font-size: 14px; width: 18px; text-align: center; }
+
+    .sidebar-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 8px 12px;
+    }
+
+    /* SEVERITY MINI STATS */
+    .sev-stats {
+      padding: 10px 12px;
+    }
+
+    .sev-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 0;
+    }
+
+    .sev-badge-mini {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      min-width: 54px;
+      text-align: center;
+    }
+
+    .sev-bar-wrap {
+      flex: 1;
+      height: 4px;
+      background: var(--bg-700);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .sev-bar-fill {
+      height: 100%;
+      border-radius: 99px;
+      transition: width 1s ease;
+    }
+
+    .sev-count-mini { font-size: 11px; color: var(--text-secondary); font-weight: 600; min-width: 14px; text-align: right; }
+
+    /* ============ CONTENT ============ */
+    .content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ============ PANELS ============ */
+    .panels {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      overflow: hidden;
+    }
+
+    /* ============ EDITOR PANEL ============ */
+    .editor-panel {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      height: 44px;
+      background: var(--bg-900);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .window-dots { display: flex; gap: 5px; }
+    .window-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .dot-red { background: #ff5f56; }
+    .dot-yellow { background: #febc2e; }
+    .dot-green { background: #27c840; }
+
+    .panel-title { font-size: 12px; color: var(--text-secondary); margin-left: 8px; font-family: 'JetBrains Mono', monospace; }
+
+    .panel-actions { margin-left: auto; display: flex; gap: 6px; }
+
+    .action-btn {
+      padding: 5px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border-light);
+      background: var(--bg-700);
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 500;
+    }
+
+    .action-btn:hover { border-color: var(--blue); color: var(--blue-light); }
+
+    .action-btn.primary {
+      background: linear-gradient(135deg, var(--blue), var(--purple));
+      border-color: transparent;
+      color: white;
+      font-weight: 600;
+    }
+
+    .action-btn.primary:hover { opacity: 0.88; transform: translateY(-1px); }
+
+    /* EDITOR BODY */
+    .editor-body {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      background: var(--bg-950);
+    }
+
+    .line-numbers {
+      padding: 14px 12px 14px 14px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--text-muted);
+      text-align: right;
+      user-select: none;
+      border-right: 1px solid var(--border);
+      background: var(--bg-900);
+      min-width: 44px;
+      overflow: hidden;
+    }
+
+    .code-area-wrap {
+      flex: 1;
+      overflow: auto;
+      padding: 14px 18px;
+    }
+
+    #code-editor {
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      border: none;
+      outline: none;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      color: #c9d1d9;
+      resize: none;
+      tab-size: 4;
+      caret-color: var(--blue-light);
+    }
+
+    /* ============ VIOLATIONS PANEL ============ */
+    .violations-panel {
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-900);
+      overflow: hidden;
+    }
+
+    .violations-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .violations-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+
+    .issues-badge {
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .violations-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+    }
+
+    .violation-card {
+      background: var(--bg-950);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .violation-card::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 3px;
+    }
+
+    .violation-card.critical::before { background: var(--critical); }
+    .violation-card.high::before { background: var(--high); }
+    .violation-card.medium::before { background: var(--medium); }
+    .violation-card.low::before { background: var(--low); }
+
+    .violation-card:hover { border-color: var(--border-light); transform: translateX(2px); }
+    .violation-card.critical:hover { border-color: rgba(239,68,68,0.4); }
+    .violation-card.high:hover { border-color: rgba(249,115,22,0.4); }
+    .violation-card.medium:hover { border-color: rgba(245,158,11,0.4); }
+    .violation-card.low:hover { border-color: rgba(59,130,246,0.4); }
+
+    .v-card-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .rule-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .v-rule-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-primary);
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .v-line {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .v-snippet {
+      background: var(--bg-800);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: #8b9bb4;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 6px;
+    }
+
+    .v-sev-tag {
+      font-size: 10px;
+      font-weight: 700;
+      margin-left: auto;
+    }
+
+    /* ============ BOTTOM BAR ============ */
+    .bottom-bar {
+      height: 44px;
+      background: var(--bg-900);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 16px;
+      font-size: 12px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .bottom-stat { display: flex; align-items: center; gap: 5px; }
+    .bottom-stat .dot { width: 6px; height: 6px; border-radius: 50%; }
+
+    /* ============ VIEWS ============ */
+    .view { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+    .view.active { display: flex; }
+
+    /* ============ SYSTEM ARCHITECTURE VIEW ============ */
+    .arch-view {
+      flex: 1;
+      overflow-y: auto;
+      padding: 28px 36px;
+    }
+
+    .arch-view h2 {
+      font-size: 22px;
+      font-weight: 800;
+      margin-bottom: 6px;
+      background: linear-gradient(90deg, var(--blue-light), var(--purple-light));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .arch-view > p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 28px;
+    }
+
+    .arch-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0;
+      margin-bottom: 36px;
+    }
+
+    .arch-node {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0 8px;
+    }
+
+    .arch-node-box {
+      width: 100%;
+      background: var(--bg-800);
+      border: 1px solid var(--border-light);
+      border-radius: 14px;
+      padding: 18px 14px;
+      text-align: center;
+      transition: all 0.3s;
+      cursor: default;
+    }
+
+    .arch-node-box:hover {
+      border-color: var(--blue);
+      transform: translateY(-3px);
+      box-shadow: 0 8px 24px rgba(59,130,246,0.15);
+    }
+
+    .arch-icon {
+      font-size: 28px;
+      margin-bottom: 10px;
+      display: block;
+    }
+
+    .arch-node-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .arch-node-sub {
+      font-size: 10px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+
+    .arch-arrow {
+      position: absolute;
+      right: -12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--blue);
+      font-size: 18px;
+      z-index: 1;
+    }
+
+    /* ============ ALGORITHM SECTION ============ */
+    .algo-section {
+      background: var(--bg-800);
+      border: 1px solid var(--border-light);
+      border-radius: 16px;
+      padding: 22px 26px;
+      margin-bottom: 28px;
+    }
+
+    .algo-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .algo-steps {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .algo-step {
+      background: var(--bg-900);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+    }
+
+    .step-num {
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--blue), var(--purple));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .step-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .step-desc {
+      font-size: 11px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* ============ RULES VIEW ============ */
+    .rules-view {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 30px;
+    }
+
+    .rules-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .rules-header-row h2 {
+      font-size: 20px;
+      font-weight: 800;
+      background: linear-gradient(90deg, var(--blue-light), var(--purple-light));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .filter-row { display: flex; gap: 6px; }
+
+    .filter-btn {
+      padding: 5px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg-800);
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .filter-btn:hover { border-color: var(--border-light); color: var(--text-primary); }
+    .filter-btn.active { color: white; border-color: transparent; }
+    .filter-btn[data-filter="ALL"].active { background: linear-gradient(135deg, var(--blue), var(--purple)); }
+    .filter-btn[data-filter="CRITICAL"].active { background: var(--critical); }
+    .filter-btn[data-filter="HIGH"].active { background: var(--high); }
+    .filter-btn[data-filter="MEDIUM"].active { background: var(--medium); }
+    .filter-btn[data-filter="LOW"].active { background: var(--low); }
+
+    .rules-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .rule-card {
+      background: var(--bg-800);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      transition: all 0.2s;
+      cursor: default;
+    }
+
+    .rule-card:hover {
+      border-color: var(--border-light);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    }
+
+    .rule-card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .rule-id-chip {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 5px;
+    }
+
+    .rule-card-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-primary);
+      line-height: 1.3;
+      flex: 1;
+    }
+
+    .rule-card-desc {
+      font-size: 11px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin-bottom: 10px;
+    }
+
+    .rule-card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .rule-type-chip {
+      font-size: 10px;
+      background: var(--bg-700);
+      color: var(--text-muted);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+
+    /* ============ MODAL / LOADING ============ */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(6,8,18,0.85);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .overlay.show { display: flex; }
+
+    .modal {
+      background: var(--bg-800);
+      border: 1px solid var(--border-light);
+      border-radius: 18px;
+      padding: 32px;
+      width: 480px;
+      text-align: center;
+    }
+
+    .modal-icon { font-size: 48px; margin-bottom: 16px; }
+    .modal-title { font-size: 18px; font-weight: 800; margin-bottom: 8px; }
+    .modal-sub { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+
+    /* LOADING ANIMATION */
+    .loader {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin: 20px 0;
+    }
+
+    .loader-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--blue);
+      animation: loader-bounce 1.2s infinite ease-in-out;
+    }
+
+    .loader-dot:nth-child(2) { animation-delay: 0.2s; background: var(--purple); }
+    .loader-dot:nth-child(3) { animation-delay: 0.4s; background: var(--cyan); }
+
+    @keyframes loader-bounce {
+      0%, 80%, 100% { transform: scale(0.7); opacity: 0.5; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+
+    /* STEP PROGRESS */
+    .engine-steps { margin-top: 16px; text-align: left; }
+
+    .engine-step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      font-size: 12px;
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .engine-step:last-child { border-bottom: none; }
+
+    .step-status {
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+
+    .step-status.done { background: var(--green); }
+    .step-status.running { background: var(--blue); animation: pulse 1s infinite; }
+    .step-status.pending { background: var(--bg-700); border: 1px solid var(--border-light); }
+
+    /* ============ EMPTY STATE ============ */
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+    }
+
+    .empty-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.5; }
+    .empty-title { font-size: 14px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+    .empty-sub { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+
+    /* ============ SUMMARY BAR ============ */
+    .summary-bar {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      display: none;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .summary-bar.show { display: flex; }
+
+    .summary-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      border: 1px solid;
+    }
+
+    /* ============ ABOUT VIEW ============ */
+    .about-view {
+      flex: 1;
+      overflow-y: auto;
+      padding: 28px 36px;
+    }
+
+    .about-hero {
+      background: linear-gradient(135deg, rgba(59,130,246,0.08), rgba(139,92,246,0.08));
+      border: 1px solid rgba(59,130,246,0.15);
+      border-radius: 18px;
+      padding: 28px;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+
+    .about-hero h2 {
+      font-size: 24px;
+      font-weight: 900;
+      margin-bottom: 8px;
+      background: linear-gradient(90deg, var(--blue-light), var(--purple-light));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .about-hero p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      max-width: 600px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    .team-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .team-card {
+      background: var(--bg-800);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      transition: all 0.2s;
+    }
+
+    .team-card:hover { border-color: var(--border-light); transform: translateY(-2px); }
+
+    .team-avatar {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--blue), var(--purple));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+
+    .team-name { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+    .team-nim { font-size: 11px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; margin-bottom: 6px; }
+    .team-role {
+      font-size: 10px;
+      background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(139,92,246,0.15));
+      color: var(--blue-light);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      display: inline-block;
+    }
+
+    .team-modules { font-size: 10px; color: var(--text-muted); margin-top: 6px; }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .info-card {
+      background: var(--bg-800);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .info-card h4 { font-size: 13px; font-weight: 700; margin-bottom: 10px; color: var(--blue-light); }
+    .info-card p { font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
+
+    /* ============ SEVERITY COLORS ============ */
+    .critical-color { color: var(--critical); }
+    .high-color { color: var(--high); }
+    .medium-color { color: var(--medium); }
+    .low-color { color: var(--low); }
+
+    .bg-critical { background: rgba(239,68,68,0.2); color: var(--critical); border-color: rgba(239,68,68,0.4); }
+    .bg-high { background: rgba(249,115,22,0.2); color: var(--high); border-color: rgba(249,115,22,0.4); }
+    .bg-medium { background: rgba(245,158,11,0.2); color: var(--medium); border-color: rgba(245,158,11,0.4); }
+    .bg-low { background: rgba(59,130,246,0.2); color: var(--low); border-color: rgba(59,130,246,0.4); }
+
+    /* RULE ID colors */
+    .rid-critical { background: rgba(239,68,68,0.2); color: var(--critical); }
+    .rid-high { background: rgba(249,115,22,0.2); color: var(--high); }
+    .rid-medium { background: rgba(245,158,11,0.2); color: var(--medium); }
+    .rid-low { background: rgba(59,130,246,0.2); color: var(--low); }
+
+    /* ============ TOAST ============ */
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--bg-700);
+      border: 1px solid var(--border-light);
+      border-radius: 10px;
+      padding: 10px 20px;
+      font-size: 13px;
+      color: var(--text-primary);
+      z-index: 9999;
+      transition: transform 0.3s ease;
+      white-space: nowrap;
+    }
+
+    .toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ============ ANIMATIONS ============ */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .violation-card { animation: fadeInUp 0.3s ease both; }
+    .rule-card { animation: fadeInUp 0.3s ease both; }
+  </style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<header class="topbar">
+  <div class="topbar-logo">
+    <div class="logo-icon">&lt;/&gt;</div>
+    <div>
+      <div class="topbar-title">AI Code Review Tutor</div>
+      <div class="topbar-subtitle">Rule-Based · AST · Forward Chaining</div>
+    </div>
+  </div>
+
+  <nav class="topbar-tabs">
+    <button class="tab-btn active" onclick="switchView('analyze', this)" id="tab-analyze">🔍 Analyze</button>
+    <button class="tab-btn" onclick="switchView('rules', this)" id="tab-rules">📋 Rules (15)</button>
+    <button class="tab-btn" onclick="switchView('architecture', this)" id="tab-arch">🏗️ Architecture</button>
+    <button class="tab-btn" onclick="switchView('about', this)" id="tab-about">👥 About</button>
+  </nav>
+
+  <div class="topbar-right">
+    <div class="status-dot"></div>
+    <span class="status-label">Engine Ready</span>
+  </div>
+</header>
+
+<!-- APP BODY -->
+<div class="app-body">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Code Templates</div>
+      <div class="sidebar-item" onclick="loadTemplate('bad')" id="tpl-bad">
+        <span class="icon">⚠️</span> sample_bad_code.py
+      </div>
+      <div class="sidebar-item" onclick="loadTemplate('empty_except')">
+        <span class="icon">💀</span> Empty Except (R13)
+      </div>
+      <div class="sidebar-item" onclick="loadTemplate('infinite_loop')">
+        <span class="icon">🔄</span> Infinite Loop (R14)
+      </div>
+      <div class="sidebar-item" onclick="loadTemplate('clean')">
+        <span class="icon">✅</span> Clean Code Example
+      </div>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Last Scan Results</div>
+      <div class="sev-stats" id="sidebar-stats">
+        <div style="font-size:11px;color:var(--text-muted);text-align:center;padding:8px 0;">Belum ada analisis</div>
+      </div>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">System Info</div>
+      <div style="padding: 6px 4px; font-size:11px; color:var(--text-secondary); line-height:1.8;">
+        <div>🐍 Python 3.8+</div>
+        <div>📦 stdlib only</div>
+        <div>⚡ 15 IF-THEN rules</div>
+        <div>🔁 BFS Traversal</div>
+        <div>🏛️ ITB Habibie</div>
+        <div>📅 Sem. Genap 2025/26</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- CONTENT AREA -->
+  <div class="content">
+
+    <!-- === VIEW: ANALYZE === -->
+    <div class="view active" id="view-analyze">
+      <div class="panels">
+        <!-- EDITOR -->
+        <div class="editor-panel">
+          <div class="panel-header">
+            <div class="window-dots">
+              <div class="window-dot dot-red"></div>
+              <div class="window-dot dot-yellow"></div>
+              <div class="window-dot dot-green"></div>
+            </div>
+            <span class="panel-title" id="editor-filename">untitled.py</span>
+            <div class="panel-actions">
+              <button class="action-btn" onclick="clearEditor()">Clear</button>
+              <button class="action-btn" onclick="loadTemplate('bad')">Load Sample</button>
+              <button class="action-btn primary" onclick="runAnalysis()" id="analyze-btn">▶ Analyze</button>
+            </div>
+          </div>
+          <div class="editor-body">
+            <div class="line-numbers" id="line-numbers">1</div>
+            <div class="code-area-wrap">
+              <textarea id="code-editor" spellcheck="false" placeholder="# Paste kode Python di sini...&#10;# Klik 'Load Sample' untuk memuat contoh kode buruk&#10;# Lalu klik '▶ Analyze' untuk memulai analisis" oninput="updateLineNumbers()"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- VIOLATIONS -->
+        <div class="violations-panel">
+          <div class="violations-header">
+            <div class="violations-title">Violations</div>
+            <div class="issues-badge bg-medium" id="issues-count" style="display:none;"></div>
+          </div>
+          <div class="summary-bar" id="summary-bar"></div>
+          <div class="violations-list" id="violations-list">
+            <div class="empty-state">
+              <div class="empty-icon">🤖</div>
+              <div class="empty-title">Siap untuk Analisis</div>
+              <div class="empty-sub">Paste kode Python di editor kiri,<br>atau load sample, lalu klik Analyze.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOTTOM STATUS BAR -->
+      <div class="bottom-bar" id="bottom-bar">
+        <div class="bottom-stat">
+          <div class="dot" style="background:var(--green)"></div>
+          <span id="status-text">Ready</span>
+        </div>
+        <span style="color:var(--border-light)">|</span>
+        <span id="line-count-info">0 baris</span>
+        <span style="color:var(--border-light)">|</span>
+        <span>Forward Chaining Engine</span>
+        <span style="color:var(--border-light)">|</span>
+        <span>15 Rules Active</span>
+        <span style="margin-left:auto; font-family:'JetBrains Mono',monospace; font-size:11px;" id="scan-time"></span>
+      </div>
+    </div>
+
+    <!-- === VIEW: RULES === -->
+    <div class="view" id="view-rules">
+      <div class="rules-view">
+        <div class="rules-header-row">
+          <div>
+            <h2>Knowledge Base — 15 Rules</h2>
+            <p style="font-size:12px;color:var(--text-secondary);margin-top:4px;">IF-THEN production rules antipattern untuk kode Python mahasiswa</p>
+          </div>
+          <div class="filter-row">
+            <button class="filter-btn active" data-filter="ALL" onclick="filterRules('ALL', this)">ALL</button>
+            <button class="filter-btn" data-filter="CRITICAL" onclick="filterRules('CRITICAL', this)">CRITICAL</button>
+            <button class="filter-btn" data-filter="HIGH" onclick="filterRules('HIGH', this)">HIGH</button>
+            <button class="filter-btn" data-filter="MEDIUM" onclick="filterRules('MEDIUM', this)">MEDIUM</button>
+            <button class="filter-btn" data-filter="LOW" onclick="filterRules('LOW', this)">LOW</button>
+          </div>
+        </div>
+        <div class="rules-grid" id="rules-grid"></div>
+      </div>
+    </div>
+
+    <!-- === VIEW: ARCHITECTURE === -->
+    <div class="view" id="view-architecture">
+      <div class="arch-view">
+        <h2>System Architecture</h2>
+        <p>Sistem AI Code Review Tutor berbasis Rule-Based Reasoning (Forward Chaining) dan LLM untuk mendeteksi antipattern pada kode Python mahasiswa.</p>
+
+        <!-- PIPELINE -->
+        <div style="background:var(--bg-800);border:1px solid var(--border-light);border-radius:16px;padding:24px;margin-bottom:24px;">
+          <div style="font-size:13px;font-weight:700;margin-bottom:18px;color:var(--text-primary);">🔄 Processing Pipeline</div>
+          <div class="arch-grid">
+            <div class="arch-node">
+              <div class="arch-node-box">
+                <span class="arch-icon">📝</span>
+                <div class="arch-node-title">Source Code</div>
+                <div class="arch-node-sub">Kode Python mahasiswa (input raw)</div>
+              </div>
+              <span class="arch-arrow">›</span>
+            </div>
+            <div class="arch-node">
+              <div class="arch-node-box">
+                <span class="arch-icon">🌳</span>
+                <div class="arch-node-title">AST Parser</div>
+                <div class="arch-node-sub">parser.py — BFS tree traversal</div>
+              </div>
+              <span class="arch-arrow">›</span>
+            </div>
+            <div class="arch-node">
+              <div class="arch-node-box">
+                <span class="arch-icon">⚙️</span>
+                <div class="arch-node-title">Inference Engine</div>
+                <div class="arch-node-sub">inference_engine.py — Forward Chaining</div>
+              </div>
+              <span class="arch-arrow">›</span>
+            </div>
+            <div class="arch-node">
+              <div class="arch-node-box">
+                <span class="arch-icon">🤖</span>
+                <div class="arch-node-title">LLM Explainer</div>
+                <div class="arch-node-sub">llm_explainer.py — Gemini AI feedback</div>
+              </div>
+              <span class="arch-arrow">›</span>
+            </div>
+            <div class="arch-node">
+              <div class="arch-node-box" style="border-color:var(--blue);background:rgba(59,130,246,0.05);">
+                <span class="arch-icon">📊</span>
+                <div class="arch-node-title" style="color:var(--blue-light);">UI Output</div>
+                <div class="arch-node-sub">Violations + Feedback edukatif</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ALGORITHM STEPS -->
+        <div class="algo-section">
+          <div class="algo-title">⚡ Forward Chaining Algorithm (Proposal §3.3)</div>
+          <div class="algo-steps">
+            <div class="algo-step">
+              <div class="step-num">1</div>
+              <div class="step-title">parse_ast(C)</div>
+              <div class="step-desc">Kode sumber diparse menjadi AST menggunakan modul <code style="font-family:monospace;color:var(--cyan)">ast</code> Python standar.</div>
+            </div>
+            <div class="algo-step">
+              <div class="step-num">2</div>
+              <div class="step-title">BFS_traverse(T)</div>
+              <div class="step-desc">Seluruh node AST di-queue dengan BFS. Working memory V* diinisialisasi kosong (∅).</div>
+            </div>
+            <div class="algo-step">
+              <div class="step-num">3</div>
+              <div class="step-title">n × r evaluation</div>
+              <div class="step-desc">Setiap node dievaluasi terhadap semua 14 PerNodeRule. Bila kondisi TRUE, violation ditambah ke V*.</div>
+            </div>
+            <div class="algo-step">
+              <div class="step-num">4</div>
+              <div class="step-title">GlobalRule (R15)</div>
+              <div class="step-desc">R15 CodeDuplication bandingkan pasangan fungsi. Similarity >80% → violation. Output di-sort CRITICAL→LOW.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MODULE TABLE -->
+        <div style="background:var(--bg-800);border:1px solid var(--border-light);border-radius:16px;padding:22px;">
+          <div style="font-size:13px;font-weight:700;margin-bottom:16px;">📁 Module Breakdown</div>
+          <table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border);">
+                <th style="text-align:left;padding:8px 12px;color:var(--text-muted);font-weight:600;">Module</th>
+                <th style="text-align:left;padding:8px 12px;color:var(--text-muted);font-weight:600;">Fungsi</th>
+                <th style="text-align:left;padding:8px 12px;color:var(--text-muted);font-weight:600;">Author</th>
+                <th style="text-align:left;padding:8px 12px;color:var(--text-muted);font-weight:600;">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:10px 12px;font-family:monospace;color:var(--cyan);">models.py</td>
+                <td style="padding:10px 12px;color:var(--text-secondary);">Severity enum + Violation dataclass</td>
+                <td style="padding:10px 12px;color:var(--text-secondary);">Rezky Arya Palanni</td>
+                <td style="padding:10px 12px;"><span style="color:var(--green);font-weight:600;">✅ Selesai</span></td>
+              </tr>
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:10px 12px;font-family:monospace;color:var(--cyan);">parser.py</td>
+                <td style="padding:10px 12px;color:var(--text-secondary);">AST Parser + BFS Traversal</td>
+                <td style="padding:10px 12px;color:var(--text-secondary);">Rezky Arya Palanni</td>
+                <td style="padding:10px 12px;"><span style="color:var(--green);font-weight:600;">✅ Selesai</span></td>
+              </tr>
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:10px 12px;font-family:monospace;color:var(--cyan);">knowledge_base.py</td>
+                <td style="padding:10px 12px;color:var(--text-secondary);">15 IF-THEN Rules Antipattern</td>
+                <td style="padding:10px 12px;color:var(--text-secondary);">Rezky Arya Palanni</td>
+                <td style="padding:10px 12px;"><span style="color:var(--green);font-weight:600;">✅ Selesai</span></td>
+              </tr>
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:10px 12px;font-family:monospace;color:var(--cyan);">inference_engine.py</td>
+                <td style="padding:10px 12px;color:var(--text-secondary);">Forward Chaining Engine</td>
+                <td style="padding:10px 12px;color:var(--text-secondary);">Andi Ahmad Naufal M</td>
+                <td style="padding:10px 12px;"><span style="color:var(--green);font-weight:600;">✅ Selesai</span></td>
+              </tr>
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:10px 12px;font-family:monospace;color:var(--cyan);">llm_explainer.py</td>
+                <td style="padding:10px 12px;color:var(--text-secondary);">Gemini AI feedback generator</td>
+                <td style="padding:10px 12px;color:var(--text-secondary);">Habel Mangopo</td>
+                <td style="padding:10px 12px;"><span style="color:var(--green);font-weight:600;">✅ Selesai</span></td>
+              </tr>
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:10px 12px;font-family:monospace;color:var(--cyan);">main.py</td>
+                <td style="padding:10px 12px;color:var(--text-secondary);">CLI runner + JSON output</td>
+                <td style="padding:10px 12px;color:var(--text-secondary);">Kelompok</td>
+                <td style="padding:10px 12px;"><span style="color:var(--green);font-weight:600;">✅ Selesai</span></td>
+              </tr>
+              <tr>
+                <td style="padding:10px 12px;font-family:monospace;color:var(--cyan);">UI (Web)</td>
+                <td style="padding:10px 12px;color:var(--text-secondary);">Frontend visualisasi</td>
+                <td style="padding:10px 12px;color:var(--text-secondary);">Muhammad Arkan</td>
+                <td style="padding:10px 12px;"><span style="color:var(--yellow);font-weight:600;">⏳ In Progress</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- === VIEW: ABOUT === -->
+    <div class="view" id="view-about">
+      <div class="about-view">
+        <div class="about-hero">
+          <h2>AI Code Review Tutor</h2>
+          <p>Sistem AI Code Review Tutor Berbasis Rule-Based Reasoning dan LLM untuk Meningkatkan Kualitas Kode Mahasiswa Pemrograman Dasar (Python)</p>
+          <div style="margin-top:16px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+            <span style="background:rgba(59,130,246,0.15);color:var(--blue-light);padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;">Kecerdasan Buatan</span>
+            <span style="background:rgba(139,92,246,0.15);color:var(--purple-light);padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;">Semester Genap 2025/2026</span>
+            <span style="background:rgba(16,185,129,0.15);color:var(--green);padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;">Institut Teknologi BJ Habibie</span>
+          </div>
+        </div>
+
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--text-primary);">👥 Tim Pengembang</div>
+        <div class="team-grid" style="margin-bottom:24px;">
+          <div class="team-card">
+            <div class="team-avatar">🎯</div>
+            <div class="team-name">Rezky Arya Palanni</div>
+            <div class="team-nim">241011106</div>
+            <span class="team-role">Ketua · AST Parser + KB</span>
+            <div class="team-modules" style="margin-top:6px;">parser.py · knowledge_base.py · models.py</div>
+          </div>
+          <div class="team-card">
+            <div class="team-avatar">⚙️</div>
+            <div class="team-name">Andi Ahmad Naufal M</div>
+            <div class="team-nim">241011128</div>
+            <span class="team-role">Inference Engine</span>
+            <div class="team-modules" style="margin-top:6px;">inference_engine.py</div>
+          </div>
+          <div class="team-card">
+            <div class="team-avatar">🤖</div>
+            <div class="team-name">Habel Mangopo</div>
+            <div class="team-nim">—</div>
+            <span class="team-role">LLM Integration</span>
+            <div class="team-modules" style="margin-top:6px;">llm_explainer.py (Gemini AI)</div>
+          </div>
+          <div class="team-card">
+            <div class="team-avatar">🎨</div>
+            <div class="team-name">Muhammad Arkan</div>
+            <div class="team-nim">—</div>
+            <span class="team-role">User Interface</span>
+            <div class="team-modules" style="margin-top:6px;">Frontend Web UI</div>
+          </div>
+          <div class="team-card">
+            <div class="team-avatar">🧪</div>
+            <div class="team-name">Muhammad Akmal A</div>
+            <div class="team-nim">—</div>
+            <span class="team-role">Testing & Dokumentasi</span>
+            <div class="team-modules" style="margin-top:6px;">test_engine.py</div>
+          </div>
+        </div>
+
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--text-primary);">📖 Justifikasi AI</div>
+        <div class="info-grid">
+          <div class="info-card">
+            <h4>🧠 Metode AI</h4>
+            <p>Forward Chaining (Symbolic AI) — rule engine adalah inti deteksi. LLM (Gemini) hanya berfungsi sebagai explainer, bukan pembuat keputusan. Ini memastikan sistem bersifat deterministic dan explainable.</p>
+          </div>
+          <div class="info-card">
+            <h4>🔍 Explainability</h4>
+            <p>Setiap violation traceable ke rule_id spesifik. Audit trail dijamin dengan field rule_id di setiap feedback LLM, sesuai proposal §4.2 (Russell & Norvig 2010).</p>
+          </div>
+          <div class="info-card">
+            <h4>📦 Zero Dependencies</h4>
+            <p>Seluruh rule engine hanya menggunakan Python standard library: ast, collections, difflib, itertools, dataclasses, enum. Cukup Python 3.8+, tanpa install apapun.</p>
+          </div>
+          <div class="info-card">
+            <h4>✅ Sifat Engine</h4>
+            <p><strong>Deterministik</strong>: input sama → output sama. <strong>Monotonic</strong>: violation tidak dicabut. <strong>Data-driven</strong>: dimulai dari fakta (AST node), bukan goal. Quiescence tercapai saat semua node × rule selesai dievaluasi.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- LOADING OVERLAY -->
+<div class="overlay" id="loading-overlay">
+  <div class="modal">
+    <div class="modal-icon">⚙️</div>
+    <div class="modal-title">Forward Chaining Engine</div>
+    <div class="modal-sub">Menganalisis kode Python dengan 15 IF-THEN rules...</div>
+    <div class="loader">
+      <div class="loader-dot"></div>
+      <div class="loader-dot"></div>
+      <div class="loader-dot"></div>
+    </div>
+    <div class="engine-steps">
+      <div class="engine-step" id="step1">
+        <div class="step-status pending" id="s1-icon">1</div>
+        <span>parse_ast(C) — Parsing source code → AST</span>
+      </div>
+      <div class="engine-step" id="step2">
+        <div class="step-status pending" id="s2-icon">2</div>
+        <span>BFS_traverse(T) — Traversal seluruh AST node</span>
+      </div>
+      <div class="engine-step" id="step3">
+        <div class="step-status pending" id="s3-icon">3</div>
+        <span>n × r evaluation — Evaluasi 14 PerNode rules</span>
+      </div>
+      <div class="engine-step" id="step4">
+        <div class="step-status pending" id="s4-icon">4</div>
+        <span>R15 GlobalRule — Code duplication check</span>
+      </div>
+      <div class="engine-step" id="step5">
+        <div class="step-status pending" id="s5-icon">5</div>
+        <span>sort_by_severity(V*) — CRITICAL → HIGH → MEDIUM → LOW</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// DATA: 15 RULES
+// ============================================================
+const RULES = [
+  { id: 'R01', name: 'bare_except', label: 'Bare Except', severity: 'HIGH',
+    desc: 'except: tanpa tipe exception — menangkap SEMUA error termasuk KeyboardInterrupt dan SystemExit. Sangat berbahaya untuk debugging.',
+    type: 'PerNodeRule', detect: 'isinstance(node, ExceptHandler) and node.type is None' },
+  { id: 'R02', name: 'non_descriptive_name', label: 'Non-Descriptive Name', severity: 'MEDIUM',
+    desc: 'Nama variabel/parameter satu huruf di luar konvensi loop counter {i,j,k,x,y,n,_}.',
+    type: 'PerNodeRule', detect: 'len(name) == 1 and name not in ALLOWED' },
+  { id: 'R03', name: 'missing_docstring', label: 'Missing Docstring', severity: 'LOW',
+    desc: 'Fungsi tanpa docstring — sulit dipahami orang lain atau diri sendiri di masa depan.',
+    type: 'PerNodeRule', detect: 'isinstance(node, FunctionDef) and not has_docstring(node)' },
+  { id: 'R04', name: 'magic_number', label: 'Magic Number', severity: 'MEDIUM',
+    desc: 'Angka literal di tengah kode tanpa nama variabel/konstanta — pembacanya tidak tahu maksud angka tersebut.',
+    type: 'PerNodeRule', detect: 'isinstance(node, Constant) and value not in {0, 1, -1}' },
+  { id: 'R05', name: 'deep_nesting', label: 'Deep Nesting', severity: 'HIGH',
+    desc: 'Nesting > 4 tingkat — kode sulit dibaca, sulit diuji, dan sangat rawan bug.',
+    type: 'PerNodeRule', detect: 'nesting_depth(node) > 4' },
+  { id: 'R06', name: 'long_function', label: 'Long Function', severity: 'MEDIUM',
+    desc: 'Fungsi dengan > 20 statements — sulit di-review dan kemungkinan melanggar Single Responsibility Principle.',
+    type: 'PerNodeRule', detect: 'isinstance(node, FunctionDef) and len(node.body) > 20' },
+  { id: 'R07', name: 'too_many_params', label: 'Too Many Params', severity: 'MEDIUM',
+    desc: 'Fungsi dengan > 5 parameter — kemungkinan perlu dipecah atau parameter dibungkus dalam objek/dict.',
+    type: 'PerNodeRule', detect: 'len(node.args.args) > 5' },
+  { id: 'R08', name: 'mutable_default', label: 'Mutable Default', severity: 'HIGH',
+    desc: 'Default argument berupa list/dict/set — bug klasik Python: default object dishare antar pemanggilan fungsi.',
+    type: 'PerNodeRule', detect: 'isinstance(default, (List, Dict, Set))' },
+  { id: 'R09', name: 'print_debug', label: 'Print Debug', severity: 'LOW',
+    desc: 'Pemanggilan print() di dalam fungsi — biasanya sisa debugging yang lupa dihapus.',
+    type: 'PerNodeRule', detect: 'func.id == "print" and is_inside_function(node)' },
+  { id: 'R10', name: 'no_return', label: 'No Return', severity: 'HIGH',
+    desc: 'Fungsi melakukan komputasi (Assign/AugAssign/loop) tapi tidak ada return statement — kemungkinan lupa.',
+    type: 'PerNodeRule', detect: 'has_computation and not has_return' },
+  { id: 'R11', name: 'hardcoded_string', label: 'Hardcoded String', severity: 'MEDIUM',
+    desc: 'String literal yang dipakai > 1 kali dalam Compare/Assign — sebaiknya diekstrak jadi konstanta bernama.',
+    type: 'PerNodeRule', detect: 'string_counts[value] >= 2 and in_compare_or_assign' },
+  { id: 'R12', name: 'global_variable', label: 'Global Variable', severity: 'MEDIUM',
+    desc: 'Penggunaan keyword global — merusak modularity, sulit di-test, sumber bug yang sulit dilacak.',
+    type: 'PerNodeRule', detect: 'isinstance(node, Global)' },
+  { id: 'R13', name: 'empty_except', label: 'Empty Except', severity: 'CRITICAL',
+    desc: 'except ...: pass — menelan error tanpa jejak apapun. Bug yang terjadi di dalam try akan hilang tanpa pesan.',
+    type: 'PerNodeRule', detect: 'isinstance(handler.body[0], Pass)' },
+  { id: 'R14', name: 'infinite_loop_risk', label: 'Infinite Loop Risk', severity: 'CRITICAL',
+    desc: 'while True: tanpa break di body — program tidak akan pernah berhenti dengan sendirinya.',
+    type: 'PerNodeRule', detect: 'is_constant_true(node.test) and not has_break(node)' },
+  { id: 'R15', name: 'code_duplication', label: 'Code Duplication', severity: 'HIGH',
+    desc: 'Dua atau lebih fungsi dengan body yang mirip > 80% (via AST signature + difflib) — kandidat refactor: ekstrak ke helper function.',
+    type: 'GlobalRule', detect: 'SequenceMatcher(sig1, sig2).ratio() > 0.8' },
+];
+
+// ============================================================
+// DEMO: Simulated violations for sample_bad_code.py
+// ============================================================
+const SAMPLE_VIOLATIONS = [
+  { rule_id: 'R13_empty_except', line_no: 43, severity: 'CRITICAL', snippet: 'except Exception:\n    pass', rule_name: 'Empty except (menyembunyikan error secara diam-diam)' },
+  { rule_id: 'R14_infinite_loop_risk', line_no: 48, severity: 'CRITICAL', snippet: 'while True:\n    print("working")', rule_name: 'Risiko infinite loop (while True tanpa break)' },
+  { rule_id: 'R01_bare_except', line_no: 33, severity: 'HIGH', snippet: 'except:', rule_name: 'Bare except (except tanpa tipe Exception)' },
+  { rule_id: 'R05_deep_nesting', line_no: 65, severity: 'HIGH', snippet: 'if ch.islower():  # depth 5', rule_name: 'Nesting terlalu dalam (>4 tingkat)' },
+  { rule_id: 'R08_mutable_default', line_no: 52, severity: 'HIGH', snippet: 'def process_items(items, cache={}):', rule_name: 'Default argument mutable (list/dict/set)' },
+  { rule_id: 'R10_no_return', line_no: 98, severity: 'HIGH', snippet: 'def compute_no_return(numbers):', rule_name: 'Fungsi melakukan komputasi tapi tidak ada return' },
+  { rule_id: 'R15_code_duplication', line_no: 115, severity: 'HIGH', snippet: 'def calculate_area_rectangle(...):  # mirip dengan fungsi lain (ratio=1.00)', rule_name: 'Duplikasi kode (similarity >80% antar fungsi)' },
+  { rule_id: 'R15_code_duplication', line_no: 124, severity: 'HIGH', snippet: 'def calculate_area_box(...):  # mirip dengan fungsi lain (ratio=1.00)', rule_name: 'Duplikasi kode (similarity >80% antar fungsi)' },
+  { rule_id: 'R02_non_descriptive_name', line_no: 18, severity: 'MEDIUM', snippet: "nama: 'u'   →   def login(u):", rule_name: 'Nama variabel tidak deskriptif (1 huruf)' },
+  { rule_id: 'R04_magic_number', line_no: 30, severity: 'MEDIUM', snippet: 'total = qty * price * 42', rule_name: 'Magic Number (angka tanpa nama/konteks)' },
+  { rule_id: 'R06_long_function', line_no: 69, severity: 'MEDIUM', snippet: 'def long_function():  # 21 statements', rule_name: 'Fungsi terlalu panjang (>20 statement)' },
+  { rule_id: 'R07_too_many_params', line_no: 27, severity: 'MEDIUM', snippet: 'def calculate_price(qty, price, discount, tax, fee, shipping):', rule_name: 'Fungsi punya terlalu banyak parameter (>5)' },
+  { rule_id: 'R11_hardcoded_string', line_no: 20, severity: 'MEDIUM', snippet: 'u == "admin_secret_token"', rule_name: 'String literal yang berulang (sebaiknya jadi konstanta)' },
+  { rule_id: 'R12_global_variable', line_no: 108, severity: 'MEDIUM', snippet: 'global g', rule_name: 'Penggunaan keyword `global` (merusak modularity)' },
+  { rule_id: 'R02_non_descriptive_name', line_no: 109, severity: 'MEDIUM', snippet: "nama: 'g'   →   g = \"changed\"", rule_name: 'Nama variabel tidak deskriptif (1 huruf)' },
+  { rule_id: 'R02_non_descriptive_name', line_no: 15, severity: 'MEDIUM', snippet: "nama: 'g'   →   g = \"admin\"", rule_name: 'Nama variabel tidak deskriptif (1 huruf)' },
+  { rule_id: 'R03_missing_docstring', line_no: 18, severity: 'LOW', snippet: 'def login(u):', rule_name: 'Fungsi tanpa docstring' },
+  { rule_id: 'R09_print_debug', line_no: 19, severity: 'LOW', snippet: 'print("debug: logging in")', rule_name: 'print() di dalam fungsi (kemungkinan sisa debug)' },
+  { rule_id: 'R09_print_debug', line_no: 49, severity: 'LOW', snippet: 'print("working")', rule_name: 'print() di dalam fungsi (kemungkinan sisa debug)' },
+];
+
+// ============================================================
+// CODE TEMPLATES
+// ============================================================
+const TEMPLATES = {
+  bad: `"""
+sample_bad_code.py — Sengaja melanggar SEMUA 15 antipattern rules.
+PERINGATAN: File ini DENGAN SENGAJA mengandung banyak kesalahan!
+"""
+
+# R12: variabel global; R02: nama satu huruf 'g'
+g = "admin"
+
+
+def login(u):  # R02: param 'u'; R03: tidak ada docstring
+    print("debug: logging in")  # R09: print() di fungsi
+    if u == "admin_secret_token":  # R11: string berulang
+        return True
+    if u == "admin_secret_token":  # R11: pengulangan kedua
+        return True
+    return False
+
+
+def calculate_price(qty, price, discount, tax, fee, shipping):
+    # R07: 6 parameter > 5
+    """Hitung total harga akhir."""
+    total = qty * price * 42  # R04: magic number 42
+    try:
+        result = total - discount + tax + fee + shipping
+    except:  # R01: bare except
+        result = total
+    return result
+
+
+def silent_failure():
+    """Demonstrasi empty except."""
+    try:
+        risky_op()
+    except Exception:
+        pass  # R13: empty except → CRITICAL
+
+
+def infinite_worker():
+    """Demonstrasi infinite loop."""
+    while True:  # R14: while True tanpa break → CRITICAL
+        print("working")  # R09: print di fungsi
+
+
+def process_items(items, cache={}):  # R08: mutable default
+    """Simpan item ke cache."""
+    for item in items:
+        cache[item] = item
+    return cache
+
+
+def deeply_nested(items):
+    """Demonstrasi nesting > 4 tingkat."""
+    for item in items:           # depth 1
+        if item:                 # depth 2
+            for ch in item:      # depth 3
+                if ch.isalpha(): # depth 4
+                    if ch.islower():  # depth 5 → R05
+                        return ch
+
+
+def compute_no_return(numbers):
+    """Komputasi tanpa return."""
+    total = 0
+    for n in numbers:
+        total = total + n
+    average = total  # R10: ada komputasi tapi tidak return
+
+
+def use_global():
+    """Akses variabel global."""
+    global g          # R12: keyword global
+    g = "changed"     # R02: g satu huruf
+
+
+# R15: dua fungsi berikut body-nya identik > 80%
+def calculate_area_rectangle(width, height):
+    """Hitung luas persegi panjang."""
+    result = width * height
+    result = result + 0
+    result = result * 1
+    result = result + 0
+    return result
+
+
+def calculate_area_box(width, height):
+    """Hitung luas kotak (sama dengan persegi panjang)."""
+    result = width * height
+    result = result + 0
+    result = result * 1
+    result = result + 0
+    return result
+`,
+  empty_except: `def fetch_data(url):
+    """Mengambil data dari URL."""
+    try:
+        response = requests.get(url)
+        data = response.json()
+        return data
+    except Exception:
+        pass  # R13: CRITICAL — error ditelan diam-diam!
+`,
+  infinite_loop: `def server_listener():
+    """Server listener tanpa kondisi stop."""
+    while True:  # R14: CRITICAL — tidak ada break!
+        message = receive_message()
+        process(message)
+`,
+  clean: `"""
+clean_code.py — Contoh kode Python yang BERSIH.
+Tidak ada violations yang akan terdeteksi oleh rule engine.
+"""
+
+from typing import List, Optional
+
+MAX_RETRIES = 3
+ADMIN_TOKEN = "admin_secret_token"
+
+
+def calculate_total_price(
+    quantity: int,
+    unit_price: float,
+    discount_rate: float = 0.0
+) -> float:
+    """Hitung total harga setelah diskon.
+
+    Args:
+        quantity: Jumlah item.
+        unit_price: Harga satuan.
+        discount_rate: Persentase diskon (0.0 - 1.0).
+
+    Returns:
+        Total harga setelah diskon.
+    """
+    subtotal = quantity * unit_price
+    discount_amount = subtotal * discount_rate
+    return subtotal - discount_amount
+
+
+def validate_token(token: str) -> bool:
+    """Validasi token autentikasi.
+
+    Args:
+        token: Token yang akan divalidasi.
+
+    Returns:
+        True jika token valid.
+    """
+    return token == ADMIN_TOKEN
+
+
+def process_items(items: List[str]) -> dict:
+    """Proses daftar item dan kembalikan hasilnya.
+
+    Args:
+        items: Daftar item yang akan diproses.
+
+    Returns:
+        Dict berisi item yang sudah diproses.
+    """
+    result = {}
+    for item in items:
+        result[item] = len(item)
+    return result
+`,
+};
+
+// ============================================================
+// SEVERITY CONFIGS
+// ============================================================
+const SEV_CONFIG = {
+  CRITICAL: { color: '#ef4444', bg: 'rgba(239,68,68,0.15)', border: 'rgba(239,68,68,0.3)', label: 'CRITICAL' },
+  HIGH:     { color: '#f97316', bg: 'rgba(249,115,22,0.15)', border: 'rgba(249,115,22,0.3)', label: 'HIGH' },
+  MEDIUM:   { color: '#f59e0b', bg: 'rgba(245,158,11,0.15)', border: 'rgba(245,158,11,0.3)', label: 'MEDIUM' },
+  LOW:      { color: '#3b82f6', bg: 'rgba(59,130,246,0.15)', border: 'rgba(59,130,246,0.3)', label: 'LOW' },
+};
+
+// ============================================================
+// INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  renderRules();
+  updateLineNumbers();
+});
+
+// ============================================================
+// VIEW SWITCHING
+// ============================================================
+function switchView(name, btn) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ============================================================
+// EDITOR
+// ============================================================
+function updateLineNumbers() {
+  const editor = document.getElementById('code-editor');
+  const lnEl = document.getElementById('line-numbers');
+  const lines = editor.value.split('\n').length;
+  lnEl.innerHTML = Array.from({length: lines}, (_, i) => i + 1).join('<br>');
+  document.getElementById('line-count-info').textContent = lines + ' baris';
+}
+
+function clearEditor() {
+  document.getElementById('code-editor').value = '';
+  document.getElementById('editor-filename').textContent = 'untitled.py';
+  updateLineNumbers();
+  resetViolationsPanel();
+}
+
+function loadTemplate(name) {
+  const code = TEMPLATES[name];
+  if (!code) return;
+  document.getElementById('code-editor').value = code;
+  const filenames = {
+    bad: 'sample_bad_code.py',
+    empty_except: 'empty_except_demo.py',
+    infinite_loop: 'infinite_loop_demo.py',
+    clean: 'clean_code.py',
+  };
+  document.getElementById('editor-filename').textContent = filenames[name] || 'untitled.py';
+  updateLineNumbers();
+  resetViolationsPanel();
+
+  // Switch to analyze view
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('view-analyze').classList.add('active');
+  document.getElementById('tab-analyze').classList.add('active');
+
+  showToast('Template loaded: ' + (filenames[name] || name));
+}
+
+// ============================================================
+// ANALYSIS ENGINE SIMULATION
+// ============================================================
+function runAnalysis() {
+  const code = document.getElementById('code-editor').value.trim();
+  if (!code) {
+    showToast('⚠️  Editor kosong! Paste kode Python dulu.');
+    return;
+  }
+
+  const overlay = document.getElementById('loading-overlay');
+  overlay.classList.add('show');
+
+  // Reset steps
+  ['s1', 's2', 's3', 's4', 's5'].forEach((id, i) => {
+    const el = document.getElementById(id + '-icon');
+    el.className = 'step-status pending';
+    el.textContent = (i + 1).toString();
+  });
+
+  const startTime = Date.now();
+
+  // Simulate engine steps
+  const steps = [
+    { id: 's1-icon', delay: 400 },
+    { id: 's2-icon', delay: 800 },
+    { id: 's3-icon', delay: 1300 },
+    { id: 's4-icon', delay: 1700 },
+    { id: 's5-icon', delay: 2100 },
+  ];
+
+  steps.forEach(({ id, delay }, idx) => {
+    // Mark running
+    setTimeout(() => {
+      const el = document.getElementById(id);
+      el.className = 'step-status running';
+      el.textContent = '⟳';
+    }, delay - 200 < 0 ? 0 : delay - 200);
+
+    // Mark done
+    setTimeout(() => {
+      const el = document.getElementById(id);
+      el.className = 'step-status done';
+      el.textContent = '✓';
+    }, delay);
+  });
+
+  // Finish
+  setTimeout(() => {
+    overlay.classList.remove('show');
+    const elapsed = Date.now() - startTime;
+
+    // Determine which violations to show
+    const templateCode = TEMPLATES['bad'];
+    const isBadSample = code.trim() === templateCode.trim();
+    const violations = isBadSample ? SAMPLE_VIOLATIONS : analyzeCodeHeuristic(code);
+
+    renderViolations(violations, elapsed);
+  }, 2400);
+}
+
+// ============================================================
+// HEURISTIC ANALYZER (client-side simulation)
+// ============================================================
+function analyzeCodeHeuristic(code) {
+  const violations = [];
+  const lines = code.split('\n');
+
+  lines.forEach((line, idx) => {
+    const lineNo = idx + 1;
+    const trimmed = line.trim();
+
+    // R13: empty except
+    if (trimmed === 'pass') {
+      const prevLine = lines[idx - 1] ? lines[idx - 1].trim() : '';
+      if (prevLine.startsWith('except')) {
+        violations.push({ rule_id: 'R13_empty_except', line_no: lineNo, severity: 'CRITICAL',
+          snippet: prevLine + '\n    pass', rule_name: 'Empty except (menyembunyikan error secara diam-diam)' });
+      }
+    }
+
+    // R14: while True without break
+    if (/^while\s+True\s*:/i.test(trimmed)) {
+      let hasBreak = false;
+      for (let j = idx + 1; j < Math.min(idx + 20, lines.length); j++) {
+        if (/^\s*break\b/.test(lines[j])) { hasBreak = true; break; }
+      }
+      if (!hasBreak) {
+        violations.push({ rule_id: 'R14_infinite_loop_risk', line_no: lineNo, severity: 'CRITICAL',
+          snippet: trimmed, rule_name: 'Risiko infinite loop (while True tanpa break)' });
+      }
+    }
+
+    // R01: bare except
+    if (/^except\s*:/.test(trimmed)) {
+      violations.push({ rule_id: 'R01_bare_except', line_no: lineNo, severity: 'HIGH',
+        snippet: trimmed, rule_name: 'Bare except (except tanpa tipe Exception)' });
+    }
+
+    // R09: print in function
+    if (/^print\s*\(/.test(trimmed)) {
+      // Check if inside function (simple heuristic: indented)
+      if (line.startsWith('    ') || line.startsWith('\t')) {
+        violations.push({ rule_id: 'R09_print_debug', line_no: lineNo, severity: 'LOW',
+          snippet: trimmed, rule_name: 'print() di dalam fungsi (kemungkinan sisa debug)' });
+      }
+    }
+
+    // R12: global keyword
+    if (/^global\s+/.test(trimmed)) {
+      violations.push({ rule_id: 'R12_global_variable', line_no: lineNo, severity: 'MEDIUM',
+        snippet: trimmed, rule_name: 'Penggunaan keyword `global` (merusak modularity)' });
+    }
+
+    // R07: too many params
+    const funcMatch = trimmed.match(/^def\s+\w+\(([^)]+)\)/);
+    if (funcMatch) {
+      const params = funcMatch[1].split(',').filter(p => p.trim() && p.trim() !== 'self');
+      if (params.length > 5) {
+        violations.push({ rule_id: 'R07_too_many_params', line_no: lineNo, severity: 'MEDIUM',
+          snippet: trimmed, rule_name: 'Fungsi punya terlalu banyak parameter (>5)' });
+      }
+      // R08: mutable default
+      if (/=\s*[\[\{]/.test(funcMatch[0])) {
+        violations.push({ rule_id: 'R08_mutable_default', line_no: lineNo, severity: 'HIGH',
+          snippet: trimmed, rule_name: 'Default argument mutable (list/dict/set)' });
+      }
+    }
+
+    // R04: magic numbers (simple)
+    const magicMatch = trimmed.match(/[=\*\+\-\/]\s*([2-9][0-9]+|[3-9][0-9]*)\b/g);
+    if (magicMatch && !trimmed.startsWith('#') && !trimmed.startsWith('"""')) {
+      violations.push({ rule_id: 'R04_magic_number', line_no: lineNo, severity: 'MEDIUM',
+        snippet: trimmed, rule_name: 'Magic Number (angka tanpa nama/konteks)' });
+    }
+  });
+
+  // Sort by severity
+  const sevOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+  violations.sort((a, b) => {
+    const d = sevOrder[a.severity] - sevOrder[b.severity];
+    return d !== 0 ? d : a.line_no - b.line_no;
+  });
+
+  return violations;
+}
+
+// ============================================================
+// RENDER VIOLATIONS
+// ============================================================
+function renderViolations(violations, elapsed) {
+  const list = document.getElementById('violations-list');
+  const countEl = document.getElementById('issues-count');
+  const summaryBar = document.getElementById('summary-bar');
+  const statusText = document.getElementById('status-text');
+  const scanTime = document.getElementById('scan-time');
+
+  // Update status
+  statusText.textContent = violations.length > 0
+    ? `${violations.length} issue${violations.length > 1 ? 's' : ''} ditemukan`
+    : 'Tidak ada issue';
+  scanTime.textContent = `Scan: ${elapsed}ms`;
+
+  // Count by severity
+  const counts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
+  violations.forEach(v => counts[v.severity]++);
+
+  // Sidebar stats
+  renderSidebarStats(counts, violations.length);
+
+  // Issue count badge
+  if (violations.length > 0) {
+    countEl.style.display = 'block';
+    const dominant = ['CRITICAL','HIGH','MEDIUM','LOW'].find(s => counts[s] > 0) || 'LOW';
+    const cfg = SEV_CONFIG[dominant];
+    countEl.style.background = cfg.bg;
+    countEl.style.color = cfg.color;
+    countEl.style.border = '1px solid ' + cfg.border;
+    countEl.textContent = violations.length + ' Issues';
+  } else {
+    countEl.style.display = 'none';
+  }
+
+  // Summary bar
+  summaryBar.innerHTML = '';
+  ['CRITICAL','HIGH','MEDIUM','LOW'].forEach(sev => {
+    if (counts[sev] > 0) {
+      const cfg = SEV_CONFIG[sev];
+      const chip = document.createElement('div');
+      chip.className = 'summary-chip';
+      chip.style.cssText = `background:${cfg.bg};color:${cfg.color};border-color:${cfg.border};`;
+      chip.innerHTML = `<span>${SEV_ICONS[sev]}</span><span>${sev}</span><strong>${counts[sev]}</strong>`;
+      summaryBar.appendChild(chip);
+    }
+  });
+  summaryBar.className = 'summary-bar' + (violations.length > 0 ? ' show' : '');
+
+  // Render cards
+  if (violations.length === 0) {
+    list.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">✅</div>
+        <div class="empty-title">Kode Bersih!</div>
+        <div class="empty-sub">Tidak ada antipattern terdeteksi.<br>Kode sudah mengikuti best practices!</div>
+      </div>`;
+    return;
+  }
+
+  list.innerHTML = '';
+  violations.forEach((v, i) => {
+    const sev = v.severity;
+    const cfg = SEV_CONFIG[sev];
+    const ruleNum = v.rule_id.match(/R(\d+)/)?.[1] || '?';
+    const card = document.createElement('div');
+    card.className = `violation-card ${sev.toLowerCase()}`;
+    card.style.animationDelay = (i * 0.06) + 's';
+
+    card.innerHTML = `
+      <div class="v-card-top">
+        <span class="rule-badge" style="background:${cfg.bg};color:${cfg.color};">R${ruleNum.padStart(2,'0')}</span>
+        <span class="v-rule-name">${v.rule_name}</span>
+        <span class="v-sev-tag" style="color:${cfg.color};">${sev}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span class="v-line">line ${v.line_no}</span>
+        <span style="color:var(--border-light);">·</span>
+        <span style="font-size:10px;color:var(--text-muted);">${v.rule_id}</span>
+      </div>
+      <div class="v-snippet">${escapeHtml(v.snippet)}</div>
+    `;
+    list.appendChild(card);
+  });
+
+  showToast(`✅ Analisis selesai — ${violations.length} violation ditemukan`);
+}
+
+const SEV_ICONS = {
+  CRITICAL: '🔴', HIGH: '🟠', MEDIUM: '🟡', LOW: '🔵'
+};
+
+function renderSidebarStats(counts, total) {
+  const el = document.getElementById('sidebar-stats');
+  if (total === 0) {
+    el.innerHTML = '<div style="font-size:11px;color:var(--green);text-align:center;padding:8px 0;">✅ Clean!</div>';
+    return;
+  }
+  const maxVal = Math.max(...Object.values(counts), 1);
+  el.innerHTML = ['CRITICAL','HIGH','MEDIUM','LOW'].map(sev => {
+    const count = counts[sev];
+    const cfg = SEV_CONFIG[sev];
+    const pct = Math.round((count / maxVal) * 100);
+    return `
+      <div class="sev-row">
+        <span class="sev-badge-mini" style="background:${cfg.bg};color:${cfg.color};">${sev.slice(0,4)}</span>
+        <div class="sev-bar-wrap">
+          <div class="sev-bar-fill" style="width:${pct}%;background:${cfg.color};"></div>
+        </div>
+        <span class="sev-count-mini">${count}</span>
+      </div>`;
+  }).join('');
+}
+
+function resetViolationsPanel() {
+  document.getElementById('violations-list').innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">🤖</div>
+      <div class="empty-title">Siap untuk Analisis</div>
+      <div class="empty-sub">Paste kode Python di editor kiri,<br>atau load sample, lalu klik Analyze.</div>
+    </div>`;
+  document.getElementById('issues-count').style.display = 'none';
+  document.getElementById('summary-bar').className = 'summary-bar';
+  document.getElementById('status-text').textContent = 'Ready';
+  document.getElementById('scan-time').textContent = '';
+  document.getElementById('sidebar-stats').innerHTML = '<div style="font-size:11px;color:var(--text-muted);text-align:center;padding:8px 0;">Belum ada analisis</div>';
+}
+
+// ============================================================
+// RENDER RULES
+// ============================================================
+function renderRules(filter = 'ALL') {
+  const grid = document.getElementById('rules-grid');
+  const filtered = filter === 'ALL' ? RULES : RULES.filter(r => r.severity === filter);
+
+  grid.innerHTML = filtered.map((r, i) => {
+    const cfg = SEV_CONFIG[r.severity];
+    return `
+      <div class="rule-card" style="animation-delay:${i * 0.05}s">
+        <div class="rule-card-header">
+          <span class="rule-id-chip rid-${r.severity.toLowerCase()}">${r.id}_${r.name}</span>
+        </div>
+        <div class="rule-card-name">${r.label}</div>
+        <div class="rule-card-desc">${r.desc}</div>
+        <div style="background:var(--bg-900);border-radius:6px;padding:7px 10px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-muted);margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+          IF ${r.detect}
+        </div>
+        <div class="rule-card-footer">
+          <span class="rule-type-chip">${r.type}</span>
+          <span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;background:${cfg.bg};color:${cfg.color};">${r.severity}</span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function filterRules(filter, btn) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderRules(filter);
+}
+
+// ============================================================
+// UTILS
+// ============================================================
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+let toastTimer;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>
